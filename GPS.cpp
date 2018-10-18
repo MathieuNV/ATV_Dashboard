@@ -1,16 +1,52 @@
+//----------------------------------------------------------------------------- 
+/** 
+ *  
+ * \file GPS.cpp
+ * \brief Management of GPS data
+ * \author M.Navarro
+ * \date 10/2018
+ *
+ * Original GPS Module used: vk2828u7g5lf
+ * Wired on hardware serial port, talking @ 921600bds
+ */
+//-----------------------------------------------------------------------------
+// (c) Copyright MN 2018 - All rights reserved
+//-----------------------------------------------------------------------------
+
+
+//---------------------------------------------
+// Include 
+//---------------------------------------------
 #include "GPS.h"
 #include <TimeLib.h> 
 #include <HardwareSerial.h>
 
-#define GPS_SPEED_THRSLD 2.0
 
+//---------------------------------------------
+// Defines
+//---------------------------------------------
+#define   GPS_SPEED_THRSLD    2.0
+
+#define   FILTER_PERIOD_MS    1
+#define   CYCLE_PERIOD_MS     1
+
+
+//---------------------------------------------
+// Enum, struct, union
+//---------------------------------------------
+
+
+//---------------------------------------------
+// Variables
+//---------------------------------------------
+double previousLatitude;
+double previousLongitude;
 
 static const uint32_t GPSBaud = 921600;
 HardwareSerial GPS_Serial(1);
 TinyGPSPlus gps;
   
 float rpm;
-int maxRpm;
 float spd;
 
 int alt;
@@ -23,21 +59,33 @@ double total = 12345.6;
  
 int test;
 
-#define FILTER_PERIOD_MS  1
-#define CYCLE_PERIOD_MS   1
 
-
+//---------------------------------------------
+// Public Functions
+//---------------------------------------------
 void GPS_Init();
 void GPS_Process();
 void GPS_Delay(unsigned long ms);
 
-double previousLatitude;
-double previousLongitude;
+
+//---------------------------------------------
+// Private Functions
+//---------------------------------------------
 
 
+//---------------------------------------------
+// Functions declarations
+//---------------------------------------------
+ 
+//---------------------------------------------
+/// \fn void GPS_Init(void)
+///
+/// \brief Init GPS Elements.
+/// \param None.
+/// \return None.
 void GPS_Init()
 {
-  Serial.begin(115200);
+  //Serial.begin(115200);
   GPS_Serial.begin(GPSBaud, SERIAL_8N1, 16, 17);
 }
 
@@ -47,23 +95,12 @@ void GPS_Process()
   static bool timeSet = false;
   static bool firstLocationSet = false;
 
-  int toto = random(128);
+  int toto = random(6000);
   rpm =  rpm * ((float)FILTER_PERIOD_MS / ((float)CYCLE_PERIOD_MS + (float)FILTER_PERIOD_MS)) +  toto * ((float)CYCLE_PERIOD_MS / ((float)CYCLE_PERIOD_MS + (float)FILTER_PERIOD_MS));
-  rpm = 10;
+  //rpm = 2500;
   
 
-  if(rpm > maxRpm)
-  {
-    maxRpm = rpm;
-  }
-  else
-  {
-    maxRpm-=2;
-    if(maxRpm <0)
-    {
-      maxRpm = 0;
-    }
-  }
+ 
  /*
   if(rpm == 128)
   {
