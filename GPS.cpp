@@ -8,6 +8,8 @@
  *
  * Original GPS Module used: vk2828u7g5lf
  * Wired on hardware serial port, talking @ 921600bds
+ * RPM signal must be wired to an pin; Computation then done by interrupt, 
+ * counting time period of each rev of the engine.
  */
 //-----------------------------------------------------------------------------
 // (c) Copyright MN 2018 - All rights reserved
@@ -30,6 +32,8 @@
 #define   FILTER_PERIOD_MS    1
 #define   CYCLE_PERIOD_MS     1
 
+#define   RPM_INPUT_PIN       13
+#define   RPM_TIMER_PERIOD_US 500000
 
 //---------------------------------------------
 // Enum, struct, union
@@ -56,8 +60,19 @@ int minutes;
   
 double trip = 0.0;
 double total = 12345.6;
- 
-int test;
+
+portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+
+volatile int interruptCounter = 0;
+volatile int rpmCounter = 0;
+volatile long microsRPM = 9999;
+
+// For external RPM interrupt
+portMUX_TYPE extISRmux = portMUX_INITIALIZER_UNLOCKED;
+
+// Timer interrupt, te refresh rpm value
+hw_timer_t * timer = NULL;
+portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
 
 //---------------------------------------------
@@ -76,7 +91,30 @@ void GPS_Delay(unsigned long ms);
 //---------------------------------------------
 // Functions declarations
 //---------------------------------------------
+
  
+void IRAM_ATTR externalISR() 
+{
+  portENTER_CRITICAL_ISR(&extISRmux);
+  interruptCounter++;  
+  rpmCounter = micros() - microsRPM;
+  microsRPM = micros();
+  portEXIT_CRITICAL_ISR(&extISRmux);
+}
+
+/* 
+ *  To Use if rpm computation done by counting number of ext ISR on a given period
+ *  
+void IRAM_ATTR timerISR() 
+{
+  portENTER_CRITICAL_ISR(&timerMux);
+  //Serial.println(interruptCounter);
+  rpmCounter = interruptCounter;
+  interruptCounter = 0;
+  portEXIT_CRITICAL_ISR(&timerMux);
+}*/
+
+
 //---------------------------------------------
 /// \fn void GPS_Init(void)
 ///
@@ -87,6 +125,15 @@ void GPS_Init()
 {
   //Serial.begin(115200);
   GPS_Serial.begin(GPSBaud, SERIAL_8N1, 16, 17);
+  Serial.begin(115200);
+  pinMode(RPM_INPUT_PIN, INPUT);
+  attachInterrupt(digitalPinToInterrupt(RPM_INPUT_PIN), externalISR, FALLING);
+  
+/*
+  timer = timerBegin(0, 80, true);
+  timerAttachInterrupt(timer, &timerISR, true);
+  timerAlarmWrite(timer, RPM_TIMER_PERIOD_US, true);
+  timerAlarmEnable(timer);*/
 }
 
 
@@ -95,23 +142,20 @@ void GPS_Process()
   static bool timeSet = false;
   static bool firstLocationSet = false;
 
-  int toto = random(6000);
+  /*int toto = random(6000);
   rpm =  rpm * ((float)FILTER_PERIOD_MS / ((float)CYCLE_PERIOD_MS + (float)FILTER_PERIOD_MS)) +  toto * ((float)CYCLE_PERIOD_MS / ((float)CYCLE_PERIOD_MS + (float)FILTER_PERIOD_MS));
+*/
   //rpm = 2500;
-  
 
- 
- /*
-  if(rpm == 128)
-  {
-    test = -1;
-  }
-  else if(rpm == 0)
-  {
-    test = 1;
-  }
-  
-  rpm += test;*/
+  // If count on period
+  //rpm = (rpmCounter * 1000000.0 / RPM_TIMER_PERIOD_US) * 60.0;
+
+  // If measure period for each rpm
+  rpm = (1000000.0/rpmCounter) * 60.0;
+  Serial.print(rpmCounter);
+  Serial.print(" ");
+  Serial.println(rpm);
+
 
   if(!firstLocationSet)
   {
@@ -124,10 +168,9 @@ void GPS_Process()
   }
 
 
-  
   if(!timeSet)
   {
-    if(gps.date.isValid() && gps.time.isValid())
+    if(gps.date.isValid() && gps.time.isValid() && gps.location.isValid())
     {
       int Year = gps.date.year();
       byte Month = gps.date.month();

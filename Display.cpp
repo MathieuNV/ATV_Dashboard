@@ -33,6 +33,12 @@ U8G2_SSD1309_128X64_NONAME0_F_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 18, /* data=*/
 dispSettings_str dispSettings;    ///< Display settings, user changeable
 int maxRpm;
 
+const uint8_t * logos[20] = { logo_ktm_bits,
+                              logo_kawasaki_bits,
+                              logo_polaris_bits,
+                              logo_yamaha_bits,
+                              logo_suzuki_bits};
+
 
 //---------------------------------------------
 // Public Functions
@@ -68,13 +74,12 @@ static void OLED_Display_Gear();
 /// \return None.
 void OLED_Init()
 {
-  dispSettings.maxRPM = 6;
+  dispSettings.maxRPM = 8;
   
   u8g2.begin();
-  
-  u8g2.clearBuffer();
-  u8g2.drawXBM(0, 0, 128, 64,logo_yamaha_bits);// logo_suzuki_bits);
 
+  u8g2.clearBuffer();
+  u8g2.drawXBM(0, 0, 128, 64, logo_suzuki_bits);// logo_suzuki_bits);
   u8g2.sendBuffer();
 }
 
@@ -120,7 +125,7 @@ void OLED_Screen_Main()
 static void OLED_Display_RPM()
 {
   char buff[32];
-  float coef = SCREEN_WIDTH / dispSettings.maxRPM;
+  float coef = (float)SCREEN_WIDTH / (float)dispSettings.maxRPM;
   int bargraphWidth;
 
   u8g2.drawLine(1, 18, SCREEN_WIDTH, 18);
@@ -142,7 +147,7 @@ static void OLED_Display_RPM()
   bargraphWidth = (rpm / (dispSettings.maxRPM*1000.0) * SCREEN_WIDTH)+0.5;
 
    // Compute "Recent max rpm" bar
-  if(bargraphWidth > maxRpm)
+  if(bargraphWidth >= maxRpm)
   {
     maxRpm = bargraphWidth;
   }
@@ -153,10 +158,6 @@ static void OLED_Display_RPM()
     if(maxRpm < bargraphWidth)
     {
       maxRpm = bargraphWidth;
-    }
-    else if(maxRpm <0)
-    {
-      maxRpm = 0;
     }
   }
 
