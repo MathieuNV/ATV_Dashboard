@@ -22,30 +22,21 @@
 //---------------------------------------------
 // Defines
 //---------------------------------------------
-#define   LOCATION_HISTORY_SIZE     2000
+#define   LOCATION_HISTORY_SIZE     2500
 
 //---------------------------------------------
 // Enum, struct, union
 //---------------------------------------------
 typedef struct
 {
-  double lng;     ///< Longitude
-  double lat;     ///< Latitude
-  int alt;        ///< Altitude, in meters
-  int spd;        ///< Speed, since last point, in km/h
-}gpsPoint_str;
-
-typedef struct
-{
-  gpsPoint_str points[LOCATION_HISTORY_SIZE];
+  double lng[LOCATION_HISTORY_SIZE];     ///< Longitude
+  double lat[LOCATION_HISTORY_SIZE];     ///< Latitude
+  int alt[LOCATION_HISTORY_SIZE];        ///< Altitude, in meters
+  int spd[LOCATION_HISTORY_SIZE];        ///< Speed, since last point, in km/h
+  
   int pointsIndex = 0;
-
-  double minLat = 90.0;
-  double maxLat = -90.0;
-
-  double minLng = 180.0;
-  double maxLng = -180.0;
 }gpsHistory_str;
+
 
 //---------------------------------------------
 // Type
@@ -74,6 +65,7 @@ extern int test;
 extern gpsHistory_str gpsHistory;
 
 extern double titi[4076];
+extern int tete[2038];
 
 //---------------------------------------------
 // Public Functions

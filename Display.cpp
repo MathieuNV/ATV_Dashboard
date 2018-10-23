@@ -45,7 +45,6 @@ hw_timer_t * oledTimer = NULL;
 portMUX_TYPE oledTimerMux = portMUX_INITIALIZER_UNLOCKED;
 volatile int oledTimerTick = 0;
 
-int tata = 0;
   
 //---------------------------------------------
 // Public Functions
@@ -53,25 +52,30 @@ int tata = 0;
 void OLED_Init();
 void OLED_Draw();
 
-// Differents screen that can be displayed
-void OLED_Screen_Main(int vOffset);
-
 
 //---------------------------------------------
 // Private Functions
 //---------------------------------------------
-static void OLED_Display_RPM(int vOffset);
-static void OLED_Display_Speed(int vOffset);
-static void OLED_Display_TripDistance(int vOffset);
-static void OLED_Display_TotalDistance(int vOffset);
-static void OLED_Display_Time(int vOffset);
-static void OLED_Display_Altitude(int vOffset);
-static void OLED_Display_Gear(int vOffset);
-static void OLED_Display_Track(int vOffset);
+// Differents screen that can be displayed
+static void OLED_Screen_Main(int vOffset);
+static void OLED_Screen_Track(int vOffset);
+static void OLED_Screen_Stats(int vOffset);
+
+// Basic Elements composing main screens 
+static void OLED_Display_RPM(int xPos, int yPos);
+static void OLED_Display_Speed(int xPos, int yPos);
+static void OLED_Display_TripDistance(int xPos, int yPos);
+static void OLED_Display_TotalDistance(int xPos, int yPos);
+static void OLED_Display_Time(int xPos, int yPos);
+static void OLED_Display_Altitude(int xPos, int yPos);
+static void OLED_Display_Gear(int xPos, int yPos);
+static void OLED_Display_Track(int xPos, int yPos, int width, int heigth);
+static void OLED_Display_History(int xPos, int yPos, int width, int heigth, int * dataArray, int dataSize, char * chartName);
 
 static int OLED_Scroll_Screens(void (*initScreen)(int), void (*finalScreen)(int));
 
 void IRAM_ATTR displayTimerISR();
+
 
 //---------------------------------------------
 // Functions
@@ -93,7 +97,7 @@ void IRAM_ATTR oledTimerISR()
 void OLED_Init()
 {
   dispSettings.maxRPM = 8;
-  Serial.begin(115200);
+  //Serial.begin(115200);
   u8g2.begin();
 
   u8g2.clearBuffer();
@@ -107,13 +111,12 @@ void OLED_Init()
 }
 
 
-
 void OLED_Draw()
 {  
   static int scrollingOnGoing = 0;
   static int currentScreenNb = 0;
   static void (*currentScreen)(int) = OLED_Screen_Main;
-  static void (*nextScreen)(int) = OLED_Display_Track;
+  static void (*nextScreen)(int) = OLED_Screen_Track;
   
    // Display main Screen only if splash logo finished 
   if(millis() > SPLASH_LOGO_DURATION_MS)
@@ -124,11 +127,6 @@ void OLED_Draw()
     {
       oledTimerTick = 0;
       scrollingOnGoing = 1;
-      
-      if(nextScreen == OLED_Display_Track)
-      {
-        tata = 0;
-      }
     }
 
     if(scrollingOnGoing)
@@ -137,11 +135,10 @@ void OLED_Draw()
       {
         scrollingOnGoing = 0;
         currentScreenNb++;
-        if(currentScreenNb > 1)
+        if(currentScreenNb > 2)
         {
           currentScreenNb = 0;
         }
-        
       }
     }
     else
@@ -149,29 +146,27 @@ void OLED_Draw()
       if(currentScreenNb == 0 )
       {
          currentScreen = OLED_Screen_Main;
-         nextScreen = OLED_Display_Track;
+         nextScreen = OLED_Screen_Track;
+      }
+      else if(currentScreenNb == 1)
+      {
+        currentScreen = OLED_Screen_Track;
+        nextScreen = OLED_Screen_Stats;
       }
       else
       {
-        currentScreen = OLED_Display_Track;
+        currentScreen = OLED_Screen_Stats;
         nextScreen = OLED_Screen_Main;
       }
-      
+
+      // Draw currentScreen
       currentScreen(0);
     }
-    /*if( (((int)millis()/1000) % 2) == 0)
-    {  
-      OLED_Screen_Main();
-    }
-    else
-    {
-      OLED_Display_Track();
-    }*/
-    
-    
+ 
     u8g2.sendBuffer();
   }
 }
+
 
 static int OLED_Scroll_Screens(void (*initScreen)(int), void (*finalScreen)(int)  )
 {
@@ -179,10 +174,8 @@ static int OLED_Scroll_Screens(void (*initScreen)(int), void (*finalScreen)(int)
 
   initScreen(offset);
   finalScreen(offset-SCREEN_HEIGHT);
-  /*OLED_Screen_Main(offset);
-  OLED_Display_Track(offset-SCREEN_HEIGHT);*/
-      
-  offset += 8;
+ 
+  offset += 16;
   
   if (offset >= SCREEN_HEIGHT)
   {
@@ -195,49 +188,63 @@ static int OLED_Scroll_Screens(void (*initScreen)(int), void (*finalScreen)(int)
   }
 }
 
-void OLED_Screen_Main(int vOffset)
-{
 
-  OLED_Display_RPM(vOffset);
-  OLED_Display_Speed(vOffset);
+static void OLED_Screen_Main(int vOffset)
+{
+  OLED_Display_RPM(0, vOffset+0);
+  OLED_Display_Speed(0, vOffset+48);
 
   // Displays total distance for some seconds at startup, then actual trip distance
   if((millis() - SPLASH_LOGO_DURATION_MS) < TOTAL_DISTANCE_DISPLAY_DURATION_MS)
   { 
-    OLED_Display_TotalDistance(vOffset);
+    OLED_Display_TotalDistance(0, vOffset+64);
   }
   else
   {
-    OLED_Display_TripDistance(vOffset);
+    OLED_Display_TripDistance(0, vOffset+64);
   }
 
-  OLED_Display_Time(vOffset);
+  OLED_Display_Time(100, vOffset+64);
   
-  OLED_Display_Altitude(vOffset); 
+  OLED_Display_Altitude(100, vOffset+54); 
+}
+
+
+static void OLED_Screen_Track(int vOffset)
+{
+  u8g2.drawFrame(0,vOffset,128,64);
+  OLED_Display_Track( 0, vOffset, 128, 64);
+}
+
+
+static void OLED_Screen_Stats(int vOffset)
+{
+  OLED_Display_History(20, 5+vOffset, 100, 25, gpsHistory.alt, gpsHistory.pointsIndex, "Alt");
+  OLED_Display_History(20, 35+vOffset, 100, 25, gpsHistory.spd, gpsHistory.pointsIndex, "Spd");
 }
 
 
 // Displays actual RPM, at the top of the screen.
-static void OLED_Display_RPM(int vOffset)
+static void OLED_Display_RPM(int xPos, int yPos)
 {
   char buff[32];
   float coef = (float)SCREEN_WIDTH / (float)dispSettings.maxRPM;
   int bargraphWidth;
 
-  u8g2.drawLine(1, vOffset+18, SCREEN_WIDTH, vOffset+18);
+  u8g2.drawLine(xPos, yPos+18, SCREEN_WIDTH, yPos+18);
 
   // Cerates bargraph legend
   for(int i = 0; i < (dispSettings.maxRPM-1); i++)
   {
-    u8g2.drawLine((coef*(i+1))+0.5, vOffset+8, (coef*(i+1))+0.5, vOffset+10);   // 500 rpms markers
+    u8g2.drawLine(xPos+((coef*(i+1))+0.5), yPos+8, xPos + ((coef*(i+1))+0.5), yPos+10);   // 500 rpms markers
     sprintf(buff, "%d", i+1);
     u8g2.setFont( u8g2_font_micro_tr);
-    u8g2.drawStr( coef*(i+1)-1,vOffset+17 , buff);          //*1000 rpm numbers
+    u8g2.drawStr( xPos + (coef*(i+1)-1),yPos+17 , buff);          //*1000 rpm numbers
   }
 
   for(int i = 0; i < (dispSettings.maxRPM+1); i++)
   {
-    u8g2.drawLine((coef*i)+0.5+(coef/2)+0.5, vOffset+8, (coef*i)+0.5+coef/2+0.5, vOffset+8);    // 500 rpms markers   
+    u8g2.drawLine(xPos + ((coef*i)+0.5+(coef/2)+0.5), yPos+8, xPos +((coef*i)+0.5+coef/2+0.5), yPos+8);    // 500 rpms markers   
   }
 
   bargraphWidth = (rpm / (dispSettings.maxRPM*1000.0) * SCREEN_WIDTH)+0.5;
@@ -258,14 +265,14 @@ static void OLED_Display_RPM(int vOffset)
   }
 
   // RPM Bar
-  u8g2.drawBox(0, vOffset+0, bargraphWidth, 7);
+  u8g2.drawBox(xPos+0, yPos+0, bargraphWidth, 7);
 
   // Recent Max RPM indication
-  u8g2.drawLine(maxRpm, vOffset+0, maxRpm, vOffset+7);
+  u8g2.drawLine(xPos + maxRpm, yPos+0, xPos + maxRpm, yPos+7);
 }
 
 
-static void OLED_Display_Speed(int vOffset)
+static void OLED_Display_Speed(int xPos, int yPos)
 {
   char buff[32];
 
@@ -279,35 +286,35 @@ static void OLED_Display_Speed(int vOffset)
   }
 
   u8g2.setFont( u8g2_font_helvB24_tn);//u8g2_font_freedoomr25_tn );
-  u8g2.drawStr( 0, vOffset+48 , buff);
+  u8g2.drawStr( xPos, yPos , buff);
   u8g2.setFont( u8g2_font_5x7_tf);
-  u8g2.drawStr( 56,vOffset+28 , "km/h");
+  u8g2.drawStr( xPos+56, yPos-20 , "km/h");
 }
 
 
 //Displays current trip distance
-static void OLED_Display_TripDistance(int vOffset)
+static void OLED_Display_TripDistance(int xPos, int yPos)
 {
   char buff[32];
   
   u8g2.setFont( u8g2_font_5x7_tf);//u8g2_font_6x10_tf);
   sprintf(buff, "Trip %d.%01d", (int)(trip/1000.0), (int)((trip/1000.0)*10.0)%10);  //  dtostrf(speed, 4, 1, buff);
-  u8g2.drawStr( 0, vOffset+64 , buff);
+  u8g2.drawStr( xPos, yPos, buff);
 }
 
 //Displays toal distance parcoured
-static void OLED_Display_TotalDistance(int vOffset)
+static void OLED_Display_TotalDistance(int xPos, int yPos)
 {
   char buff[32];
   
   u8g2.setFont( u8g2_font_5x7_tf);//u8g2_font_6x10_tf);
   sprintf(buff, "Total %d.%01d", (int)total,(int)(total*100)%100);
-  u8g2.drawStr( 0, vOffset+64 , buff);
+  u8g2.drawStr( xPos, yPos , buff);
 }
 
 
 //Displays current time
-static void OLED_Display_Time(int vOffset)
+static void OLED_Display_Time(int xPos, int yPos)
 {
   char buff[32];
   
@@ -321,11 +328,11 @@ static void OLED_Display_Time(int vOffset)
   {
     sprintf( buff, "--:-- ");
   }
-  u8g2.drawStr( 100, vOffset+64 , buff);
+  u8g2.drawStr( xPos, yPos, buff);
 }
 
 
-static void OLED_Display_Altitude(int vOffset)
+static void OLED_Display_Altitude(int xPos, int yPos)
 {
   char buff[32];
   
@@ -337,41 +344,29 @@ static void OLED_Display_Altitude(int vOffset)
   {
     sprintf( buff, "----m");
   }
-  u8g2.drawStr( 100, vOffset+54 , buff);
+  u8g2.drawStr( xPos, yPos, buff);
 }
 
 
-static void OLED_Display_Gear(int vOffset)
+static void OLED_Display_Gear(int xPos, int yPos)
 {
   char buff[32];
   
   //Engaged gear display
   sprintf(buff, "N" );
   u8g2.setFont(u8g2_font_helvB18_tf );//u8g2_font_helvB24_tn  );//u8g2_font_freedoomr25_tn );// u8g2_font_logisoso26_tn  );
-  u8g2.drawStr( 110, vOffset+42 , buff);
+  u8g2.drawStr( xPos, yPos , buff);
 }
 
 
-static void OLED_Display_Track(int vOffset)
+static void OLED_Display_Track(int xPos, int yPos, int width, int heigth)
 {
   char buff[32];
   double latCoef, lngCoef;
   double latCartesian, lngCartesian;
- 
-/*
-  gpsHistory.maxLng = 4.30778685;
-  gpsHistory.minLng = 4.199846964;
-  
-  gpsHistory.maxLat = 45.49161321;
-  gpsHistory.minLat = 45.45201852;
-*/
-/*
-  gpsHistory.maxLng = -180;
-  gpsHistory.minLng = 180;
-  
-  gpsHistory.maxLat = -90;
-  gpsHistory.minLat = 90;
-  
+  int hMargin = 2, vMargin = 2;
+  double minLng= 180, maxLng = -180, minLat= 90, maxLat = -90;
+  /* 
   gpsHistory.pointsIndex = tata;
   tata +=30;
   if(tata >=2038)
@@ -379,42 +374,121 @@ static void OLED_Display_Track(int vOffset)
     tata = 2038;
   }
 
-  for(int i = 0; i < gpsHistory.pointsIndex; i++)
+   for(int i = 0; i < gpsHistory.pointsIndex; i++)
   {
-    if( gpsHistory.minLat > titi[i*2+1])
+    if( minLat > titi[i*2+1])
     {
-      gpsHistory.minLat = titi[i*2+1];
+      minLat = titi[i*2+1];
     }
 
-    if(gpsHistory.maxLat < titi[i*2+1])
+    if(maxLat < titi[i*2+1])
     {
-      gpsHistory.maxLat = titi[i*2+1];
+      maxLat = titi[i*2+1];
     }
 
-    if( gpsHistory.minLng > titi[i*2])
+    if( minLng > titi[i*2])
     {
-      gpsHistory.minLng = titi[i*2];
+      minLng = titi[i*2];
     }
 
-    if( gpsHistory.maxLng < titi[i*2])
+    if( maxLng < titi[i*2])
     {
-      gpsHistory.maxLng = titi[i*2];
+      maxLng = titi[i*2];
     }
+  }*/
 
-  }
-  */
-  lngCoef = gpsHistory.maxLng - gpsHistory.minLng;
-  latCoef = gpsHistory.maxLat - gpsHistory.minLat;
 
   for(int i = 0; i < gpsHistory.pointsIndex; i++)
   {
-    /*lngCartesian = (titi[i*2] - gpsHistory.minLng) / lngCoef * (double)SCREEN_WIDTH;
-    latCartesian = SCREEN_HEIGHT-((titi[i*2+1] - gpsHistory.minLat) / latCoef * (double)SCREEN_HEIGHT);*/
-    latCartesian =  SCREEN_HEIGHT - ((gpsHistory.points[i].lat - gpsHistory.minLat) / latCoef * SCREEN_HEIGHT);
-    lngCartesian =  (gpsHistory.points[i].lng - gpsHistory.minLng) / lngCoef * SCREEN_WIDTH;
+    if( minLat > gpsHistory.lat[i])
+    {
+      minLat = gpsHistory.lat[i];
+    }
 
-    u8g2.drawPixel((int)lngCartesian, vOffset+(int)latCartesian);
+    if(maxLat < gpsHistory.lat[i])
+    {
+      maxLat = gpsHistory.lat[i];
+    }
+
+    if( minLng > gpsHistory.lng[i])
+    {
+      minLng = gpsHistory.lng[i];
+    }
+
+    if( maxLng < gpsHistory.lng[i])
+    {
+      maxLng = gpsHistory.lng[i];
+    }
+  }
+  
+  lngCoef = maxLng - minLng;
+  latCoef = maxLat - minLat;
+
+  for(int i = 0; i < gpsHistory.pointsIndex; i++)
+  {
+    /*latCartesian = yPos + heigth - vMargin -((titi[i*2+1] - minLat) / latCoef * (double)(heigth-(vMargin*2)));
+    lngCartesian = xPos + hMargin +(titi[i*2] - minLng) / lngCoef * (double)(width-(hMargin*2));
+    */
+    latCartesian =  SCREEN_HEIGHT - vMargin - ((gpsHistory.lat[i] - minLat) / latCoef * (double)(SCREEN_HEIGHT-(vMargin*2)));
+    lngCartesian =  hMargin + (gpsHistory.lng[i] - minLng) / lngCoef * (double)(SCREEN_WIDTH-(hMargin*2));
+
+    u8g2.drawPixel((int)lngCartesian, (int)latCartesian);
   }
 
-   u8g2.drawDisc((int)lngCartesian, vOffset+(int)latCartesian, 2);
+   u8g2.drawDisc((int)lngCartesian, (int)latCartesian, 2);
 }
+
+
+static void OLED_Display_History(int xPos, int yPos, int width, int heigth, int * dataArray, int dataSize, char * chartName)
+{
+  char buff[32];
+  int indexCoef;
+  int valCoef;
+  int minVal = 10000, maxVal = 0;
+  int hMargin = 2, vMargin = 3;
+
+  int textWidth = 13;
+
+  // Prepare necessary values for plotting
+  for(int i = 0; i < dataSize; i++)
+  {
+    if(dataArray[i] >= maxVal)
+    {
+      maxVal = dataArray[i];
+    }
+    else if(dataArray[i] <= minVal)
+    {
+      minVal = dataArray[i];
+    }
+  }
+  
+  valCoef = maxVal - minVal;
+  indexCoef = dataSize / (width-2*hMargin-textWidth);
+  
+  if(indexCoef < 1)
+  {
+    indexCoef = 1;
+  }
+
+  // Display chart axis
+  u8g2.drawLine(xPos+textWidth, yPos, xPos+textWidth, yPos+heigth);
+  u8g2.drawLine(xPos+textWidth, yPos+heigth, xPos+width, yPos+heigth);
+  
+  // Display Scale
+  u8g2.setFont( u8g2_font_micro_tr);
+  sprintf(buff, "%d", (int)maxVal);
+  u8g2.drawStr( xPos, yPos+7 , buff);  
+  sprintf(buff, "%d", (int)minVal);
+  u8g2.drawStr( xPos, yPos+heigth-1 , buff); 
+
+  // Chart Name
+  sprintf(buff, "%s", chartName); 
+  u8g2.drawStr( xPos-6, yPos+heigth/2+3 , buff); 
+
+  // Plot values
+  for(int i = 0; i < dataSize; i++)//width-1; i++)
+  {
+    u8g2.drawPixel(xPos+i/indexCoef+1+hMargin+textWidth, (yPos+heigth-hMargin-1) - ((float)(dataArray[i]-minVal)/(float)valCoef)*(float)(heigth-1-2*hMargin));
+  } 
+}
+
