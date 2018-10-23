@@ -61,7 +61,7 @@ void loop(void)
 
   OLED_Draw();
   
-  GPS_Delay(20);
+  GPS_Delay(0);
 }
 
 
