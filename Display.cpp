@@ -24,7 +24,7 @@
 // Enum, struct, union
 //---------------------------------------------
 #define OLED_TIMER_PERIOD_US    10000000
-
+//#define DEBUG
 
 //---------------------------------------------
 // Variables
@@ -69,7 +69,7 @@ static void OLED_Display_TotalDistance(int xPos, int yPos);
 static void OLED_Display_Time(int xPos, int yPos);
 static void OLED_Display_Altitude(int xPos, int yPos);
 static void OLED_Display_Gear(int xPos, int yPos);
-static void OLED_Display_Track(int xPos, int yPos, int width, int heigth);
+static void OLED_Display_Track(int xPos, int yPos, int width, int heigth, double *xDataArray, double *yDataArray, int dataSize);
 static void OLED_Display_History(int xPos, int yPos, int width, int heigth, int * dataArray, int dataSize, char * chartName);
 
 static int OLED_Scroll_Screens(void (*initScreen)(int), void (*finalScreen)(int));
@@ -108,6 +108,17 @@ void OLED_Init()
   timerAttachInterrupt(oledTimer, &oledTimerISR, true);
   timerAlarmWrite(oledTimer, OLED_TIMER_PERIOD_US, true);
   timerAlarmEnable(oledTimer);
+
+#ifdef DEBUG
+  for(int i = 0; i < 2038; i++)
+  {
+    gpsHistory.lng[i] = titi[i*2];
+    gpsHistory.lat[i] = titi[i*2+1];
+    gpsHistory.alt[i] = tete[i];
+    gpsHistory.spd[i] = tete[i];
+    gpsHistory.pointsIndex++;
+  }
+#endif
 }
 
 
@@ -207,13 +218,15 @@ static void OLED_Screen_Main(int vOffset)
   OLED_Display_Time(100, vOffset+64);
   
   OLED_Display_Altitude(100, vOffset+54); 
+
+  OLED_Display_Gear(110, 42);
 }
 
 
 static void OLED_Screen_Track(int vOffset)
 {
   u8g2.drawFrame(0,vOffset,128,64);
-  OLED_Display_Track( 0, vOffset, 128, 64);
+  OLED_Display_Track(0, vOffset, 128, 64, gpsHistory.lng, gpsHistory.lat, gpsHistory.pointsIndex);
 }
 
 
@@ -359,83 +372,53 @@ static void OLED_Display_Gear(int xPos, int yPos)
 }
 
 
-static void OLED_Display_Track(int xPos, int yPos, int width, int heigth)
+static void OLED_Display_Track(int xPos, int yPos, int width, int heigth, double *xDataArray, double *yDataArray, int dataSize)
 {
   char buff[32];
-  double latCoef, lngCoef;
-  double latCartesian, lngCartesian;
-  int hMargin = 2, vMargin = 2;
-  double minLng= 180, maxLng = -180, minLat= 90, maxLat = -90;
-  /* 
-  gpsHistory.pointsIndex = tata;
-  tata +=30;
-  if(tata >=2038)
+  double xCartesian, yCartesian;
+  int hMargin = 4, vMargin = 4;
+  double minX= 180, maxX = -180, minY= 90, maxY = -90;
+  double xCoef, yCoef;
+
+  for(int i = 0; i < dataSize; i++)
   {
-    tata = 2038;
-  }
-
-   for(int i = 0; i < gpsHistory.pointsIndex; i++)
-  {
-    if( minLat > titi[i*2+1])
+    if( minY > yDataArray[i])
     {
-      minLat = titi[i*2+1];
+      minY = yDataArray[i];
     }
 
-    if(maxLat < titi[i*2+1])
+    if(maxY < yDataArray[i])
     {
-      maxLat = titi[i*2+1];
+      maxY = yDataArray[i];
     }
 
-    if( minLng > titi[i*2])
+    if( minX > xDataArray[i])
     {
-      minLng = titi[i*2];
+      minX = xDataArray[i];
     }
 
-    if( maxLng < titi[i*2])
+    if( maxX < xDataArray[i])
     {
-      maxLng = titi[i*2];
-    }
-  }*/
-
-
-  for(int i = 0; i < gpsHistory.pointsIndex; i++)
-  {
-    if( minLat > gpsHistory.lat[i])
-    {
-      minLat = gpsHistory.lat[i];
-    }
-
-    if(maxLat < gpsHistory.lat[i])
-    {
-      maxLat = gpsHistory.lat[i];
-    }
-
-    if( minLng > gpsHistory.lng[i])
-    {
-      minLng = gpsHistory.lng[i];
-    }
-
-    if( maxLng < gpsHistory.lng[i])
-    {
-      maxLng = gpsHistory.lng[i];
+      maxX = xDataArray[i];
     }
   }
   
-  lngCoef = maxLng - minLng;
-  latCoef = maxLat - minLat;
+  xCoef = maxX - minX;
+  yCoef = maxY - minY;
 
-  for(int i = 0; i < gpsHistory.pointsIndex; i++)
+  for(int i = 0; i < dataSize; i++)
   {
-    /*latCartesian = yPos + heigth - vMargin -((titi[i*2+1] - minLat) / latCoef * (double)(heigth-(vMargin*2)));
-    lngCartesian = xPos + hMargin +(titi[i*2] - minLng) / lngCoef * (double)(width-(hMargin*2));
-    */
-    latCartesian =  SCREEN_HEIGHT - vMargin - ((gpsHistory.lat[i] - minLat) / latCoef * (double)(SCREEN_HEIGHT-(vMargin*2)));
-    lngCartesian =  hMargin + (gpsHistory.lng[i] - minLng) / lngCoef * (double)(SCREEN_WIDTH-(hMargin*2));
-
-    u8g2.drawPixel((int)lngCartesian, (int)latCartesian);
+    yCartesian = yPos + heigth - vMargin -((yDataArray[i] - minY) / yCoef * (double)(heigth-(vMargin*2)));
+    xCartesian = xPos + hMargin +(xDataArray[i] - minX) / xCoef * (double)(width-(hMargin*2));
+    
+    /*
+    yCartesian =  SCREEN_HEIGHT - vMargin - ((yDataArray[i] - minY) / yCoef * (double)(SCREEN_HEIGHT-(vMargin*2)));
+    xCartesian =  hMargin + (xDataArray[i] - minX) / xCoef * (double)(SCREEN_WIDTH-(hMargin*2));
+*/
+    u8g2.drawPixel((int)xCartesian, (int)yCartesian);
   }
 
-   u8g2.drawDisc((int)lngCartesian, (int)latCartesian, 2);
+   u8g2.drawDisc((int)xCartesian, (int)yCartesian, 2);
 }
 
 

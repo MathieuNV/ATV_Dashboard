@@ -57,6 +57,7 @@ void setup(void)
 /// \return None.
 void loop(void) 
 {
+  
   GPS_Process();
 
   OLED_Draw();
