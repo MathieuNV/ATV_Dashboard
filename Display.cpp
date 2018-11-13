@@ -67,6 +67,7 @@ static void OLED_Display_Speed(int xPos, int yPos);
 static void OLED_Display_TripDistance(int xPos, int yPos);
 static void OLED_Display_TotalDistance(int xPos, int yPos);
 static void OLED_Display_Time(int xPos, int yPos);
+static void OLED_Display_Satellites(int xPos, int yPos);
 static void OLED_Display_Altitude(int xPos, int yPos);
 static void OLED_Display_Gear(int xPos, int yPos);
 static void OLED_Display_Track(int xPos, int yPos, int width, int heigth, double *xDataArray, double *yDataArray, int dataSize);
@@ -134,6 +135,9 @@ void OLED_Draw()
   {
     u8g2.clearBuffer();
 
+    // Draw currentScreen
+    currentScreen(0);
+/*
     if(oledTimerTick)
     {
       oledTimerTick = 0;
@@ -173,7 +177,7 @@ void OLED_Draw()
       // Draw currentScreen
       currentScreen(0);
     }
- 
+ */
     u8g2.sendBuffer();
   }
 }
@@ -219,7 +223,9 @@ static void OLED_Screen_Main(int vOffset)
   
   OLED_Display_Altitude(100, vOffset+54); 
 
-  OLED_Display_Gear(110, 42);
+  OLED_Display_Satellites(88, vOffset+64);
+
+  OLED_Display_Gear(110, vOffset+42);
 }
 
 
@@ -291,7 +297,7 @@ static void OLED_Display_Speed(int xPos, int yPos)
 
   if(gps.speed.isValid())
   {
-    sprintf(buff, "%3d", (int)(spd+0.5));
+    sprintf(buff, "%3d", (int)(gps.speed.kmph()+0.5));
   }
   else
   {
@@ -335,7 +341,7 @@ static void OLED_Display_Time(int xPos, int yPos)
   
   if(gps.time.isValid())
   {
-    sprintf( buff, "%02d:%02d ",hours ,minutes);
+    sprintf( buff, "%02d:%02d ", hour(), minute());
   }
   else
   {
@@ -351,13 +357,44 @@ static void OLED_Display_Altitude(int xPos, int yPos)
   
   if(gps.altitude.isValid())
   {
-    sprintf( buff, "%4dm",alt);
+    sprintf( buff, "%4dm", (int)gps.altitude.meters());
   }
   else
   {
     sprintf( buff, "----m");
   }
   u8g2.drawStr( xPos, yPos, buff);
+}
+
+
+static void OLED_Display_Satellites(int xPos, int yPos)
+{
+  char buff[32];
+  
+  if(gps.satellites.isValid())
+  {
+    sprintf( buff, "%d", gps.satellites.value());
+  }
+  else
+  {
+    sprintf( buff, "-");
+  }
+  u8g2.drawStr( xPos-22, yPos, buff);
+
+  if(recordTrip)
+  {
+    u8g2.setFont(u8g2_font_open_iconic_play_1x_t);
+    u8g2.drawGlyph(xPos-10, yPos+1, 0x46);
+  }
+  
+  if(firstFixDone)
+  {
+    u8g2.setFont(u8g2_font_open_iconic_check_1x_t);
+    u8g2.drawGlyph(xPos, yPos+1, 0x40);
+    //u8g2.drawDisc();
+  }
+
+  
 }
 
 
@@ -474,4 +511,3 @@ static void OLED_Display_History(int xPos, int yPos, int width, int heigth, int 
     u8g2.drawPixel(xPos+i/indexCoef+1+hMargin+textWidth, (yPos+heigth-hMargin-1) - ((float)(dataArray[i]-minVal)/(float)valCoef)*(float)(heigth-1-2*hMargin));
   } 
 }
-

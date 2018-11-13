@@ -17,7 +17,7 @@
 // Include 
 //---------------------------------------------
 #include <TinyGPS++.h>
-
+#include <TimeLib.h> 
 
 //---------------------------------------------
 // Defines
@@ -50,12 +50,8 @@ extern TinyGPSPlus gps;
 
 
 extern float rpm;
-extern float spd;
-
-extern int alt;
-  
-extern int hours;
-extern int minutes;
+extern bool firstFixDone;
+extern bool recordTrip;
   
 extern double trip;
 extern double total;

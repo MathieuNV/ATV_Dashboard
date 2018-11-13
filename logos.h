@@ -1,5 +1,9 @@
-// Splash screen logos, in x bitmap format
+#ifndef _LOGOS_H
+#define _LOGOS_H
 
+
+
+// Splash screen logos, in x bitmap format
 
 #define logo_suzuki_width 128
 #define logo_suzuki_height 64
@@ -455,3 +459,4 @@ const uint8_t logo_ktm_bits[] = {
    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
    0x00, 0x00, 0x00, 0x00 };
 
+#endif

@@ -20,8 +20,6 @@
 #include <ESP32WebServer.h>    // https://github.com/Pedroalbuquerque/ESP32WebServer download and place in your Libraries folder
 #include <ESPmDNS.h>
 #include <Update.h>
-#include "FS.h"
-#include "SPIFFS.h"
 
 #include "Web_Server.h"
 #include "File.h"
@@ -45,8 +43,6 @@ String htmlContent = "";
 
 const char ssid[]     = "WIFI";
 const char password[] = "azertyui";
-
-fs::FS fileSystem = SPIFFS;                 ///< File system to use to read/write file (SPIFFS = internal memory, SD = external SD Card)
 
 File UploadFile;                            ///< File, necessary to handle file uploads
 

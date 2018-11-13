@@ -46,6 +46,8 @@
 /// \return None.
 void setup(void)
 {
+  Serial.begin(115200);
+  
   GPS_Init();
   OLED_Init();
 
@@ -71,5 +73,3 @@ void loop(void)
 
   WebServer_Handle();
 }
-
-

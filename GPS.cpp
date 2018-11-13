@@ -20,21 +20,24 @@
 // Include 
 //---------------------------------------------
 #include "GPS.h"
-#include <TimeLib.h> 
+#include "File.h"
 #include <HardwareSerial.h>
 
 
 //---------------------------------------------
 // Defines
 //---------------------------------------------
-#define   GPS_SPEED_THRSLD    2.0
+#define   GPS_SPEED_THRSLD      2.0       ///< min speed to compute trip distance (in km/h)
 
-#define   FILTER_PERIOD_MS    1
-#define   CYCLE_PERIOD_MS     1
+#define   FILTER_PERIOD_MS      1
+#define   CYCLE_PERIOD_MS       1
 
-#define   RPM_INPUT_PIN       13
+#define   RPM_INPUT_PIN         13        ///< Pin used for external RPM calculation
 
-#define   GPS_TIMER_PERIOD_US 1000000
+#define   GPS_TIMER_PERIOD_US   1000000   ///< Timer interrupt period; at each interrupt, log GPS data
+
+#define   TRIP_RECORD_DELAY_MS  20000     ///< Delay after fist fix to start data record (in ms)
+
 
 //---------------------------------------------
 // Enum, struct, union
@@ -53,12 +56,6 @@ HardwareSerial GPS_Serial(1);
 TinyGPSPlus gps;
   
 float rpm;
-float spd;
-
-int alt;
-  
-int hours;
-int minutes;
   
 double trip = 0.0;
 double total = 12345.6;
@@ -68,6 +65,13 @@ portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 volatile int interruptCounter = 0;
 volatile int rpmCounter = 0;
 volatile long microsRPM = 9999;
+volatile bool recordISRappened = false;
+
+bool firstFixDone = false;
+bool recordTrip = false;
+long firstFixMillis = 0;    ///< time in ms at which fix has been done
+
+char filename[32]; 
 
 // For external RPM interrupt
 portMUX_TYPE extISRmux = portMUX_INITIALIZER_UNLOCKED;
@@ -108,27 +112,32 @@ void IRAM_ATTR externalISR()
 
 
 void IRAM_ATTR gpsTimerISR() 
-{
+{  
   portENTER_CRITICAL_ISR(&gpsTimerMux);
-  
-  if(gps.location.isValid())  //if(gps.speed.kmph() >= GPS_SPEED_THRSLD)
+
+  if(recordTrip)
   {
-    gpsHistory.lat[gpsHistory.pointsIndex] = gps.location.lat();
-    gpsHistory.lng[gpsHistory.pointsIndex] = gps.location.lng();
+    recordISRappened = true;
     
-    if(gps.speed.isValid())
+    
+    /*if(gps.location.isValid())  //if(gps.speed.kmph() >= GPS_SPEED_THRSLD)
     {
-      gpsHistory.spd[gpsHistory.pointsIndex] = gps.speed.kmph();
-    }
-    
-    if(gps.altitude.isValid())
-    {
-      gpsHistory.alt[gpsHistory.pointsIndex] = gps.altitude.meters(); 
-    }
-    
-    gpsHistory.pointsIndex++;
+      gpsHistory.lat[gpsHistory.pointsIndex] = gps.location.lat();
+      gpsHistory.lng[gpsHistory.pointsIndex] = gps.location.lng();
+      
+      if(gps.speed.isValid())
+      {
+        gpsHistory.spd[gpsHistory.pointsIndex] = gps.speed.kmph();
+      }
+      
+      if(gps.altitude.isValid())
+      {
+        gpsHistory.alt[gpsHistory.pointsIndex] = gps.altitude.meters(); 
+      }
+      
+      gpsHistory.pointsIndex++;
+    }*/
   }
-  
   portEXIT_CRITICAL_ISR(&gpsTimerMux);
 }
 
@@ -147,7 +156,6 @@ void GPS_Init()
   pinMode(RPM_INPUT_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(RPM_INPUT_PIN), externalISR, FALLING);
   
-
   gpsTimer = timerBegin(0, 80, true);
   timerAttachInterrupt(gpsTimer, &gpsTimerISR, true);
   timerAlarmWrite(gpsTimer, GPS_TIMER_PERIOD_US, true);
@@ -157,77 +165,78 @@ void GPS_Init()
 
 void GPS_Process()
 {
-  static bool timeSet = false;
-  static bool firstLocationSet = false;
-
+  char buff[64];
   /*int toto = random(6000);
   rpm =  rpm * ((float)FILTER_PERIOD_MS / ((float)CYCLE_PERIOD_MS + (float)FILTER_PERIOD_MS)) +  toto * ((float)CYCLE_PERIOD_MS / ((float)CYCLE_PERIOD_MS + (float)FILTER_PERIOD_MS));
 */
-  //rpm = 2500;
 
   // If count on period
   //rpm = (rpmCounter * 1000000.0 / RPM_TIMER_PERIOD_US) * 60.0;
 
   // If measure period for each rpm
   rpm = (1000000.0/rpmCounter) * 60.0;
-  /*Serial.print(rpmCounter);
-  Serial.print(" ");
-  Serial.println(rpm);*/
 
-
-  if(!firstLocationSet)
+  // Wait everything ok to consider fix done
+  if(!firstFixDone)
   {
-    if(gps.location.isValid())
+     if( gps.location.isValid() && gps.date.isValid()  && gps.time.isValid()     
+      && gps.altitude.isValid() && gps.speed.isValid() && gps.satellites.isValid())
     {
-      previousLatitude = gps.location.lat();
+      firstFixDone = true;
+
+      // First location
+      previousLatitude  = gps.location.lat();
       previousLongitude = gps.location.lng();
-      firstLocationSet = true;
-    }
-  }
 
-
-  if(!timeSet)
-  {
-    if(gps.date.isValid() && gps.time.isValid() && gps.location.isValid())
-    {
-      int Year = gps.date.year();
-      byte Month = gps.date.month();
-      byte Day = gps.date.day();
-      byte Hour = gps.time.hour();
-      byte Minute = gps.time.minute();
-      byte Second = gps.time.second();
-    
-      // Set Time from GPS data string
-      setTime(Hour, Minute, Second, Day, Month, Year);
+      // Set Time from GPS data string. Will be then updated by ESP32 RTC functions
+      setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), gps.date.day(), gps.date.month(), gps.date.year());
       // Calc current Time Zone time by offset value
-      adjustTime(2 * 3600);   
-      timeSet = true;   
+      adjustTime(1 * 3600);   
+      
+      firstFixMillis = millis();
     }
   }
-  
-  hours = hour();
-  minutes = minute();
-       
-  if(gps.speed.isValid())
+
+  if(!recordTrip)
   {
-    spd = gps.speed.kmph();
-  }
-  
-  if(gps.altitude.isValid())
-  {
-    alt = gps.altitude.meters();
+    if(firstFixDone && (millis() >= (firstFixMillis + TRIP_RECORD_DELAY_MS)) )
+    {
+      recordTrip = true;
+      
+      // Creates File to log GPS Data
+      sprintf( filename, "/%4d%2d%2d_%2d%2d%2d.csv", year(), month(), day(), hour(), minute(), second());
+    
+      // = String(year()) + String(month()) +  String(day()) + "_"+ String(hour()) + String(minute()) + String(second()) +".csv";
+      Serial.print(filename);
+      File_Write( fileSystem, filename, "sep=,\n");
+      File_Append(fileSystem, filename, "Latitude, Longitute, Altitude, Speed\n");
+    }
   }
 
+  if(recordISRappened)
+  {
+    gpsHistory.lat[gpsHistory.pointsIndex] = gps.location.lat();
+    gpsHistory.lng[gpsHistory.pointsIndex] = gps.location.lng();
+    
+    gpsHistory.spd[gpsHistory.pointsIndex] = gps.speed.kmph();
+    gpsHistory.alt[gpsHistory.pointsIndex] = gps.altitude.meters(); 
+
+    sprintf( buff, "%f, %f, %d, %d\n", gps.location.lat(), gps.location.lng(), (int)gps.altitude.meters(), (int)gps.speed.kmph());
+    File_Append(fileSystem, filename, buff);
+    recordISRappened = false;
+    gpsHistory.pointsIndex++;
+  }
+
+  // Trip distance computation; add elapsed distance since previous point
   if(gps.location.isValid())
   {
-    if(gps.speed.kmph() >= GPS_SPEED_THRSLD)
+    if(gps.speed.kmph() >= GPS_SPEED_THRSLD) // Only compute if speed considered as not null
     {
        trip += gps.distanceBetween( gps.location.lat(), gps.location.lng(), previousLatitude, previousLongitude);
        previousLatitude = gps.location.lat();
        previousLongitude = gps.location.lng();
     }
   }
-  //trip = 1256235.562;
 }
   
 
@@ -239,8 +248,8 @@ void GPS_Delay(unsigned long ms)
   do 
   {
     while (GPS_Serial.available())
+    {
       gps.encode(GPS_Serial.read());
+    }
   } while (millis() - start < ms);
 }
-
-
