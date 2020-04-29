@@ -21,6 +21,8 @@
 //---------------------------------------------
 #include "GPS.h"
 #include "File.h"
+#include "GPIO.h"
+#include "Settings.h"
 #include <HardwareSerial.h>
 
 
@@ -32,11 +34,11 @@
 #define   FILTER_PERIOD_MS      1
 #define   CYCLE_PERIOD_MS       1
 
-#define   RPM_INPUT_PIN         13        ///< Pin used for external RPM calculation
-
 #define   GPS_TIMER_PERIOD_US   1000000   ///< Timer interrupt period; at each interrupt, log GPS data
 
 #define   TRIP_RECORD_DELAY_MS  20000     ///< Delay after fist fix to start data record (in ms)
+
+#define   GPS_CHECK_PERIOD_MS   1000      ///< Process count of bytes received from GPS at this period, to check if connected
 
 
 //---------------------------------------------
@@ -47,7 +49,6 @@
 //---------------------------------------------
 // Variables
 //---------------------------------------------
-
 double previousLatitude;
 double previousLongitude;
 
@@ -150,11 +151,10 @@ void IRAM_ATTR gpsTimerISR()
 /// \return None.
 void GPS_Init()
 {
-  //Serial.begin(115200);
   GPS_Serial.begin(GPSBaud, SERIAL_8N1, 16, 17);
-  //Serial.begin(115200);
-  pinMode(RPM_INPUT_PIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(RPM_INPUT_PIN), externalISR, FALLING);
+
+  pinMode(PIN_RPM_INPUT, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(PIN_RPM_INPUT), externalISR, FALLING);
   
   gpsTimer = timerBegin(0, 80, true);
   timerAttachInterrupt(gpsTimer, &gpsTimerISR, true);
@@ -166,15 +166,14 @@ void GPS_Init()
 void GPS_Process()
 {
   char buff[64];
-  /*int toto = random(6000);
+  int toto = random(9000);
   rpm =  rpm * ((float)FILTER_PERIOD_MS / ((float)CYCLE_PERIOD_MS + (float)FILTER_PERIOD_MS)) +  toto * ((float)CYCLE_PERIOD_MS / ((float)CYCLE_PERIOD_MS + (float)FILTER_PERIOD_MS));
-*/
 
   // If count on period
   //rpm = (rpmCounter * 1000000.0 / RPM_TIMER_PERIOD_US) * 60.0;
 
   // If measure period for each rpm
-  rpm = (1000000.0/rpmCounter) * 60.0;
+  //rpm = (1000000.0/rpmCounter) * 60.0;
 
   // Wait everything ok to consider fix done
   if(!firstFixDone)
@@ -204,12 +203,12 @@ void GPS_Process()
       recordTrip = true;
       
       // Creates File to log GPS Data
-      sprintf( filename, "/%4d%2d%2d_%2d%2d%2d.csv", year(), month(), day(), hour(), minute(), second());
+      sprintf( filename, "/%04d%02d%02d_%02d%02d%002d.csv", year(), month(), day(), hour(), minute(), second());
     
       // = String(year()) + String(month()) +  String(day()) + "_"+ String(hour()) + String(minute()) + String(second()) +".csv";
       Serial.print(filename);
       File_Write( fileSystem, filename, "sep=,\n");
-      File_Append(fileSystem, filename, "Latitude, Longitute, Altitude, Speed\n");
+      File_Append(fileSystem, filename, "Latitude, Longitude, Altitude, Speed\n");
     }
   }
 
@@ -244,7 +243,9 @@ void GPS_Process()
 // is being "fed".
 void GPS_Delay(unsigned long ms)
 {
+  static long checkDataTime;
   unsigned long start = millis();
+  
   do 
   {
     while (GPS_Serial.available())
@@ -252,4 +253,18 @@ void GPS_Delay(unsigned long ms)
       gps.encode(GPS_Serial.read());
     }
   } while (millis() - start < ms);
+
+  if(millis() > (checkDataTime + GPS_CHECK_PERIOD_MS))
+  {
+    if(gps.charsProcessed() < 10)
+    {
+      // Diagnose GPS problem
+      //GPIO_LedSet(true);
+    }
+    else
+    {
+      //GPIO_LedSet(false);
+    }
+    checkDataTime = millis();
+  } 
 }

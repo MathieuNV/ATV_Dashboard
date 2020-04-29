@@ -24,7 +24,7 @@
 //---------------------------------------------
 // Defines
 //---------------------------------------------
-#define   FORMAT_SPIFFS_IF_FAILED false
+#define   FORMAT_SPIFFS_IF_FAILED true
 #define   SD_CS_pin               5
 
 #define DEBUG_FILE
@@ -50,6 +50,9 @@ int File_Write(fs::FS &fs, const char * path, const char * message);
 int File_Append(fs::FS &fs, const char * path, const char * message);
 int File_Rename(fs::FS &fs, const char * path1, const char * path2);
 int File_Delete(fs::FS &fs, const char * path);
+int File_TotalBytes(fs::FS &fs);
+int File_UsedBytes(fs::FS &fs);
+int File_ListDir(fs::FS &fs, const char * dirname, uint8_t levels);
 
 //---------------------------------------------
 // Private Functions
@@ -207,6 +210,76 @@ int File_Delete(fs::FS &fs, const char * path)
 
   return success;
 }
+
+
+int File_TotalBytes(fs::FS &fs)
+{
+  return 4194304;
+  /*
+  FSInfo fs_info;
+  fs.info(fs_info);
+  return fs_info.totalBytes;*/
+}
+
+
+int File_UsedBytes(fs::FS &fs)
+{
+  int totalSize = 0;
+
+  totalSize = File_ListDir(fs, "/", 0);
+
+  return totalSize;
+}
+
+
+int File_ListDir(fs::FS &fs, const char * dirname, uint8_t levels)
+{
+  int totalSize = 0;
+  Serial.printf("Listing directory: %s\r\n", dirname);
+
+  File root = fs.open(dirname);
+  
+  if(!root)
+  {
+      Serial.println("- failed to open directory");
+      return 0;
+  }
+  
+  if(!root.isDirectory())
+  {
+      Serial.println(" - not a directory");
+      return 0;
+  }
+
+  File file = root.openNextFile();
+  
+  while(file)
+  {
+      if(file.isDirectory())
+      {
+          Serial.print("  DIR : ");
+          Serial.println(file.name());
+          
+          if(levels)
+          {
+              File_ListDir(fs, file.name(), levels -1);
+          }
+      } 
+      else 
+      {
+          Serial.print("  FILE: ");
+          Serial.print(file.name());
+          Serial.print("\tSIZE: ");
+          Serial.println(file.size());
+          totalSize += file.size();
+      }
+      
+      file = root.openNextFile();
+  }
+  
+  return totalSize;
+}
+
 
 
 String File_FormatSize(int bytes)

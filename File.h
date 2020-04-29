@@ -53,4 +53,6 @@ extern int File_Write(fs::FS &fs, const char * path, const char * message);
 extern int File_Append(fs::FS &fs, const char * path, const char * message);
 extern int File_Rename(fs::FS &fs, const char * path1, const char * path2);
 extern int File_Delete(fs::FS &fs, const char * path);
+extern int File_TotalBytes(fs::FS &fs);
+extern int File_UsedBytes(fs::FS &fs);
 #endif

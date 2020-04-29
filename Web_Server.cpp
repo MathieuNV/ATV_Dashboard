@@ -21,6 +21,7 @@
 #include <ESPmDNS.h>
 #include <Update.h>
 
+#include "Settings.h"
 #include "Web_Server.h"
 #include "File.h"
 
@@ -52,6 +53,7 @@ File UploadFile;                            ///< File, necessary to handle file 
 //---------------------------------------------
 void WebServer_Init();
 void WebServer_Handle();
+void WebServer_Stop();
 
 
 //---------------------------------------------
@@ -99,7 +101,11 @@ static void HTML_Send_Header();
 
 void WebServer_Init()
 {
-
+  if(!settings.webServerEnable)
+  {
+    return;
+  }
+  
 #ifdef DEBUG_WEBSERVER
   Serial.begin(115200);
 #endif
@@ -142,15 +148,26 @@ void WebServer_Init()
 
 void WebServer_Handle()
 {
-  // Listen for client connections
-  server.handleClient(); 
-
-#ifdef DEBUG_WEBSERVER
-  if(millis()%5000 == 0)
+  if(settings.webServerEnable )
   {
-    Serial.println(".");
-  }
+    // Listen for client connections
+    server.handleClient(); 
+  
+#ifdef DEBUG_WEBSERVER
+    if(millis()%5000 == 0)
+    {
+      Serial.println(".");
+    }
 #endif
+  }
+}
+
+
+void WebServer_Stop()
+{
+  WiFi.softAPdisconnect(true);
+  MDNS.end();
+  server.stop();
 }
 
 

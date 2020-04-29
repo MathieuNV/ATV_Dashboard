@@ -44,5 +44,6 @@
 //---------------------------------------------
 extern void WebServer_Init();
 extern void WebServer_Handle();
-#endif
+extern void WebServer_Stop();
 
+#endif

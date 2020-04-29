@@ -48,7 +48,6 @@ typedef struct
 //---------------------------------------------
 extern TinyGPSPlus gps;
 
-
 extern float rpm;
 extern bool firstFixDone;
 extern bool recordTrip;
@@ -60,6 +59,7 @@ extern int test;
 
 extern gpsHistory_str gpsHistory;
 
+#ifdef SIMU_TEST_GPS
 const int tete[2038]={
 600 ,
 600 ,
@@ -4139,7 +4139,7 @@ const double titi[4076] = {
 4.29875543341040  , 45.4865904338657  ,
 4.29899943061172  , 45.4864820558577  ,
 4.29899138398468  , 45.4864479415118 };
-        
+#endif        
 
 //---------------------------------------------
 // Public Functions
